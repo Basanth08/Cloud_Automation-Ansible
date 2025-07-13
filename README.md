@@ -62,6 +62,118 @@ Before I get started, I make sure I have:
   ansible-playbook provision_infrastructure.yml
   ```
 
+## Setup and Installation Log
+
+Here’s how I set up my EC2 instance and installed Ansible for cloud automation:
+
+### SSH Connection
+- I created an EC2 instance using the Ubuntu 24.04 AMI.
+- I used my public IP and `.pem` key to connect:
+  ```bash
+  cd /Users/varagantibasanthkumar/Desktop
+  chmod 400 ansible-ohio-key.pem
+  ssh -i ansible-ohio-key.pem ubuntu@18.191.203.32
+  ```
+- Once connected, I saw the Ubuntu shell prompt:
+  ```
+  ubuntu@ip-172-31-47-122:~$
+  ```
+
+### Installing Ansible
+- I tried to install Ansible using user data, but it wasn’t present after boot.
+- I manually ran:
+  ```bash
+  sudo apt update
+  sudo apt install ansible -y
+  ```
+- I encountered network errors because my instance couldn’t reach the Ubuntu repositories.
+
+### Troubleshooting Network Issues
+- I checked my security group and ensured SSH was allowed from my IP.
+- I updated the **outbound rules** to allow all traffic (0.0.0.0/0).
+- After fixing the outbound rule, I was able to update and install packages.
+
+### Verifying Ansible Installation
+- I checked the Ansible version:
+  ```bash
+  ansible --version
+  ```
+- Output:
+  ```
+  ansible [core 2.16.3]
+    config file = None
+    configured module search path = ['/home/ubuntu/.ansible/plugins/modules', '/usr/share/ansible/plugins/modules']
+    ansible python module location = /usr/lib/python3/dist-packages/ansible
+    ansible collection location = /home/ubuntu/.ansible/collections:/usr/share/ansible/collections
+    executable location = /usr/bin/ansible
+    python version = 3.12.3 (main, Feb  4 2025, 14:48:35) [GCC 13.3.0] (/usr/bin/python3)
+    jinja version = 3.1.2
+    libyaml = True
+  ```
+- Ansible is now ready to use for automating my cloud infrastructure!
+
+## AWS CLI Installation and Verification
+
+To interact with AWS from my EC2 instance, I installed and configured the AWS CLI:
+
+### Installing AWS CLI
+- I attempted to install AWS CLI using apt, but the package was not available.
+- Instead, I used the official AWS CLI installer script:
+  ```bash
+  curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+  sudo apt update
+  sudo apt install unzip -y
+  unzip awscliv2.zip
+  sudo ./aws/install
+  aws --version
+  ```
+
+### Verifying AWS CLI Configuration
+- I verified my AWS CLI setup and IAM role with:
+  ```bash
+  aws sts get-caller-identity
+  ```
+- Output:
+  ```json
+  {
+      "UserId": "AROA5FTZB6VPTSKO2G5VT:i-0c32ef1f11a001524",
+      "Account": "905418241375",
+      "Arn": "arn:aws:sts::905418241375:assumed-role/ansible-admin/i-0c32ef1f11a001524"
+  }
+  ```
+- This confirms that my instance is authenticated as the IAM role `ansible-admin` and is ready for AWS automation tasks.
+
+## Sample Playbook: Creating and Storing an EC2 Key Pair
+
+Here’s a complete example of how I use Ansible to create an EC2 key pair, print the output, and save the private key to a PEM file:
+
+```yaml
+- hosts: localhost
+  connection: local
+  gather_facts: False
+  tasks:
+    - name: sample ec2 key
+      ec2_key:
+        name: sample
+        region: us-east-2
+      register: keyout
+
+    - debug:
+        var: keyout
+
+    - name: store login key
+      copy:
+        content: "{{ keyout.key.private_key }}"
+        dest: ./sample-key.pem
+```
+
+**Explanation:**
+- I run this playbook locally.
+- I use the `ec2_key` module to create a key pair named `sample` in the `us-east-2` region.
+- I register the output as `keyout`.
+- I print the output using the `debug` module.
+- I store the private key in a file called `sample-key.pem` using the `copy` module, so I can use it to log in to my EC2 instances.
+
 ## Project Structure
 ```
 Cloud_Automation-Ansible/

@@ -3,6 +3,8 @@
   hosts: localhost
   connection: local
   gather_facts: no
+  collections:
+    - amazon.aws
   tasks:
     - name: Import VPC setup Variable
       include_vars: vars/bastion_setup
@@ -11,11 +13,10 @@
       include_vars: vars/output_vars
 
     - name: Create vprofile ec2 key
-      ec2_key:
+      amazon.aws.ec2_key:
         name: vprofile-key
         region: "{{region}}"
       register: key_out
-
 
     - name: Save private key into file bastion-key.pem
       copy:
@@ -25,7 +26,7 @@
       when: key_out.changed
 
     - name: Create Sec Grp for bastion host
-      ec2_group:
+      amazon.aws.ec2_group:
         name: Bastion-host-sg
         description: Allow port 22 from everywhere and all port within sg
         region: "{{region}}"
@@ -38,7 +39,7 @@
       register: BastionSG_out
 
     - name: Creating Bastion Host
-      ec2:
+      amazon.aws.ec2:
         key_name: vprofile-key
         region: "{{region}}"
         instance_type: t2.micro

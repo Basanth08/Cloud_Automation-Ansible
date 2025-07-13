@@ -83,6 +83,36 @@ When I work with VPCs, I deal with many moving parts—subnets, NAT gateways, in
 
 ---
 
+## Quick Start
+
+1. I clone the repository:
+   ```bash
+   git clone git@github.com:Basanth08/Cloud_Automation-Ansible.git
+   cd Cloud_Automation-Ansible
+   ```
+
+2. I install Ansible and required collections:
+   ```bash
+   sudo apt update
+   sudo apt install ansible python3-pip -y
+   pip3 install --break-system-packages boto boto3
+   ansible-galaxy collection install amazon.aws community.aws
+   ```
+
+3. I configure my AWS credentials and variables.
+
+4. I run the VPC setup playbook:
+   ```bash
+   ansible-playbook vpc-setup.yml
+   ```
+
+5. I run the bastion host playbook:
+   ```bash
+   ansible-playbook bastion-instance.yml
+   ```
+
+---
+
 ## Sample Playbook: Creating and Storing an EC2 Key Pair
 
 Here’s a complete example of how I use Ansible to create an EC2 key pair, print the output, and save the private key to a PEM file:
@@ -91,9 +121,11 @@ Here’s a complete example of how I use Ansible to create an EC2 key pair, prin
 - hosts: localhost
   connection: local
   gather_facts: False
+  collections:
+    - amazon.aws
   tasks:
     - name: sample ec2 key
-      ec2_key:
+      amazon.aws.ec2_key:
         name: sample
         region: us-east-2
       register: keyout
@@ -109,10 +141,78 @@ Here’s a complete example of how I use Ansible to create an EC2 key pair, prin
 
 **Explanation:**
 - I run this playbook locally.
-- I use the `ec2_key` module to create a key pair named `sample` in the `us-east-2` region.
+- I use the `amazon.aws.ec2_key` module to create a key pair named `sample` in the `us-east-2` region.
 - I register the output as `keyout`.
 - I print the output using the `debug` module.
 - I store the private key in a file called `sample-key.pem` using the `copy` module, so I can use it to log in to my EC2 instances.
+
+---
+
+## Bastion Host Playbook Example
+
+Here’s how I use Ansible to set up a bastion host using the output variables and the correct AWS module names:
+
+```yaml
+- name: Setup Vprofile Bastion Host
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  collections:
+    - amazon.aws
+  tasks:
+    - name: Import VPC setup Variable
+      include_vars: vars/bastion_setup
+
+    - name: Import VPC setup Variable
+      include_vars: vars/output_vars
+
+    - name: Create vprofile ec2 key
+      amazon.aws.ec2_key:
+        name: vprofile-key
+        region: "{{region}}"
+      register: key_out
+
+    - name: Save private key into file bastion-key.pem
+      copy:
+        content: "{{key_out.key.private_key}}"
+        dest: "./bastion-key.pem"
+        mode: 0600
+      when: key_out.changed
+
+    - name: Create Sec Grp for bastion host
+      amazon.aws.ec2_group:
+        name: Bastion-host-sg
+        description: Allow port 22 from everywhere and all port within sg
+        region: "{{region}}"
+        vpc_id: "{{vpcid}}"
+        rules:
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: "{{MYIP}}"
+      register: BastionSG_out
+
+    - name: Creating Bastion Host
+      amazon.aws.ec2:
+        key_name: vprofile-key
+        region: "{{region}}"
+        instance_type: t2.micro
+        image: "{{ bastion_ami }}"
+        wait: yes
+        wait_timeout: 300
+        instance_tags:
+          Name: "Bastion_host"
+          Project: Vprofile
+          Owner: DevOps Team
+        exact_count: 1
+        count_tag:
+          Name: "Bastion_host"
+          Project: Vprofile
+          Owner: DevOps Team
+        group_id: "{{BastionSG_out.group_id}}"
+        vpc_subnet_id: "{{pubsub1id}}"
+      register: bastionHost_out
+```
 
 ---
 
@@ -159,30 +259,77 @@ When I look at the AWS console, I see multiple subnets listed. Here’s why:
 
 ---
 
+## Troubleshooting Ansible AWS Modules and Collections
+
+During my automation journey, I encountered several issues with Ansible AWS modules. Here’s how I resolved them and what I learned:
+
+### Problem: Couldn't resolve module/action 'ec2' or 'amazon.aws.ec2'
+- Ansible could not find the `ec2` module, even after installing the `amazon.aws` collection.
+- This is because, in modern Ansible, AWS modules are not built-in—they are part of external collections.
+
+### Solution Steps
+1. **Install the required collections:**
+   ```bash
+   ansible-galaxy collection install amazon.aws
+   ansible-galaxy collection install community.aws
+   ```
+2. **Add the collection to my playbook:**
+   ```yaml
+   collections:
+     - amazon.aws
+     - community.aws
+   ```
+3. **Use fully qualified module names:**
+   - For example, use `amazon.aws.ec2` or `community.aws.ec2` instead of just `ec2`.
+4. **Check installed collections:**
+   ```bash
+   ansible-galaxy collection list
+   ```
+   - I made sure `amazon.aws` and/or `community.aws` appeared in the list.
+5. **Force reinstall if needed:**
+   ```bash
+   ansible-galaxy collection install amazon.aws --force
+   ```
+6. **Check my Ansible version:**
+   ```bash
+   ansible --version
+   ```
+   - I upgraded if it was older than 2.10.
+
+### Problem: Python PEP 668 and pip install errors
+- On Ubuntu 24.04, I saw errors about an "externally-managed-environment" when installing Python packages like `boto` and `boto3`.
+
+### Solution Steps
+1. **Use a virtual environment (recommended):**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install boto boto3
+   ```
+2. **Or, override the restriction (not recommended for production):**
+   ```bash
+   pip3 install --break-system-packages boto boto3
+   ```
+
+### Best Practices
+- Always specify the collection in my playbook for AWS modules.
+- Use fully qualified module names (e.g., `amazon.aws.ec2`, `community.aws.ec2`).
+- Make sure all required Python libraries (`boto`, `boto3`) are installed in the correct environment.
+- Keep Ansible and collections up to date.
+
+---
+
 ## Project Files Overview
 
 - **README.md**: Project documentation, scenario, setup, troubleshooting, and playbook examples.
 - **architecture.png**: Architecture diagram for the automation flow.
 - **bastion-instance.yml**: Ansible playbook to set up a bastion host, including key creation, security group, and EC2 instance launch.
 - **vpc-setup.yml**: Ansible playbook to set up a VPC, subnets, gateways, and route tables, and output resource IDs.
-- **vars/**: Contains variable files for playbooks (`bastion_setup`, `vpc_setup`, and generated `output_vars`).
+- **vars/**: Contains variable files for playbooks (`bastion_setup`, `vpc_setup`, and generated `output_vars` (I had to delete this file cause of security issue, this should'nt be exposed)).
 - **Diagrams/**: (Currently empty)
 
 ---
 
-## Project Structure
 
-```
-Cloud_Automation-Ansible/
-├── playbooks/           # Ansible playbooks
-├── roles/               # Ansible roles
-├── inventory/           # Inventory files
-├── group_vars/          # Group variables
-├── host_vars/           # Host variables
-├── vars/                # Variable files
-├── architecture.png     # Architecture diagram
-├── README.md            # Project documentation
-```
 
----
 

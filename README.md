@@ -24,7 +24,7 @@ When I work with VPCs, I deal with many moving parts—subnets, NAT gateways, in
 
 ## Architecture
 
-![Cloud Automation Architecture](architecture.png)
+![Cloud Automation Architecture](./Diagrams/architecture.png)
 
 *This diagram shows the automated flow for provisioning AWS resources using Ansible.*
 

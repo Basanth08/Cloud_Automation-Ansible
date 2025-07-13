@@ -29,7 +29,7 @@
         map_public: yes
         resource_tags:
           Name: vprofile-pubsub1
-      register: pubsub1_out   # <-- This should be at the same level as ec2_vpc_subnet
+      register: pubsub1_out
   
     - name: create Public subnet 3 in zone3
       ec2_vpc_subnet:
